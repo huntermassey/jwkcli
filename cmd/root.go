@@ -50,4 +50,5 @@ func init() {
 
 	// add subcommands
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(generateCmd)
 }
