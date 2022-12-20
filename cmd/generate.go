@@ -3,9 +3,16 @@ package cmd
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"time"
 
+	"github.com/lestrrat-go/jwx/v2/cert"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -28,11 +35,13 @@ var generateCmd = &cobra.Command{
 }
 
 var (
-	alg string = ""
+	alg     string = ""
+	useCert bool   = false
 )
 
 func initGenerate() {
 	serveCmd.Flags().StringVarP(&serveFile, "alg", "f", "", "File path to serve as /.well-known/jwks.json")
+	serveCmd.Flags().BoolVarP(&useCert, "use-cert", "c", false, "Whether to generate and include a self-signed cert for x5c, x5t values")
 }
 
 func runGenerate(cmd *cobra.Command, args []string) {
@@ -63,6 +72,45 @@ func runGenerate(cmd *cobra.Command, args []string) {
 		log.Errorf("error producing public key from private, %v", err)
 	}
 
+	_, x5c, x5t := generateCertificateRSA(privateKey)
+	chain := cert.Chain{}
+	chain.Add([]byte(x5c[0]))
+	pubKey.Set("x5c", &chain)
+	pubKey.Set("x5t", x5t)
+
 	jwkPubBytes, err := json.Marshal(pubKey)
 	fmt.Println(string(jwkPubBytes))
+}
+
+func generateCertificateRSA(privKey *rsa.PrivateKey) (cert *x509.Certificate, x5c []string, x5t string) {
+	var certTemplate = x509.Certificate{
+		SerialNumber: big.NewInt(1337),
+		Subject: pkix.Name{
+			Country:      []string{"US"},
+			Organization: []string{"Company Co."},
+			CommonName:   "Self-signed test",
+		},
+		NotBefore:   time.Now().Add(-10 * time.Second),
+		NotAfter:    time.Now().Add(365 * 24 * time.Hour), // 1 year! ... or, close enough
+		KeyUsage:    x509.KeyUsageCRLSign,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IsCA:        false,
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, &certTemplate, &certTemplate, &privKey.PublicKey, privKey)
+	if err != nil {
+		panic("Failed to create certificate:" + err.Error())
+	}
+
+	cert, err = x509.ParseCertificate(certBytes)
+	if err != nil {
+		panic("Failed to parse created certificate:" + err.Error())
+	}
+
+	x5c = []string{base64.StdEncoding.EncodeToString(certBytes)}
+
+	sha1Thumbprint := sha1.Sum(certBytes)
+	x5t = base64.URLEncoding.EncodeToString(sha1Thumbprint[:])
+
+	return
 }

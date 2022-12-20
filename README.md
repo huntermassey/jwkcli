@@ -2,6 +2,10 @@
 
 A CLI for interacting with JSON Web Keys (JWK) and JSON Web Key Sets (JWKS).
 
+! WARNING !
+
+THIS IS HEAVILY WORK IN PROGRESS, AND CURRENTLY INTENDED MOSTLY FOR SELF-EDUCATION
+
 ## Target
 
 Implement a CLI for generating, inspecting, and serving JWK/JWKS files with the following intents:
@@ -11,7 +15,7 @@ Implement a CLI for generating, inspecting, and serving JWK/JWKS files with the 
 
 ## Usage
 
-Sketch of desired usage
+Sketch of desired usage below
 
 ### Generate a new JWK
 
@@ -26,3 +30,13 @@ jwkcli inspect -remote https://example.com/.well-known/jwks.json
 ### Serve JWKS json
 
 jwkcli serve -file <file>
+
+## Notes
+
+### Inspecting x5c
+
+Save x5c value base64 decoded to file, and inspect with:
+
+```
+openssl x509 -inform der -in test.der -text -noout
+```
